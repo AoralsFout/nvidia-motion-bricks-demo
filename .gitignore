@@ -1,0 +1,10 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+.runtime/
+logs/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
