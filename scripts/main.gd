@@ -2,13 +2,19 @@ extends Node3D
 ## Official SOMA Gym, with an optional flat-ground mode for gait comparisons.
 
 const Bridge = preload("res://scripts/motion_bridge.gd")
-const TargetSkeletonDebug = preload("res://scripts/target_skeleton_debug.gd")
 const GymWorld = preload("res://scripts/gym_world.gd")
 const ACCENT := Color("b6f260")
 const MUTED := Color("8c999a")
 const WALK_SPEED := 2.3
 const RUN_SPEED := 4.5
 @export var draw_target_skeletons: bool = false
+@export_group("Camera")
+@export var follow_player: bool = true
+@export var orient_camera_on_teleport: bool = true
+@export_range(0.08, 1.1, 0.01) var camera_pitch: float = 0.28
+@export_range(2.5, 10.0, 0.1) var camera_distance: float = 5.5
+@export var camera_yaw: float = -PI / 2
+@export_range(0, 2, 0.05) var shoulder_offset: float = 0.8
 var bridge := Bridge.new()
 var skeleton: Skeleton3D
 var camera: Camera3D
@@ -18,9 +24,6 @@ var current_pose := PackedFloat32Array()
 var interpolation_time: float = 0.0
 var root_position := Vector3.ZERO
 var camera_target := Vector3(0, 1, 0)
-var camera_yaw: float = 0.0
-var camera_pitch: float = 0.28
-var camera_distance: float = 5.5
 var backend_pid: int = -1
 var status_label: Label
 var fps_label: Label
@@ -50,13 +53,14 @@ var _tap_axis := Vector2.ZERO
 var _tap_sprint: bool = false
 var _sprint_for_frame: bool = false
 var _tap_remaining: float = 0.0
-var flat_mode: bool = false
+@export_group("Demo")
+@export var flat_mode: bool = false
 var gym_world: Node3D
-var gym_metadata: Dictionary = {}
 var scene_hint: Label
 var auto_toggle: CheckButton
 var trigger_toggle: CheckButton
-var overview: bool = false
+@export var overview: bool = false
+var overview_camera: Camera3D
 var _scene_revision: int = -1
 var _teleport_serial: int = -1
 var _test_station: int = 0
@@ -86,8 +90,8 @@ func _ready() -> void:
 			_automated = true
 			flat_mode = true
 			_duration = float(argument.trim_prefix("--soak="))
-	_make_world()
-	_make_hud()
+	_bind_world()
+	_bind_hud()
 	_load_character()
 	_set_debug_targets(draw_target_skeletons)
 	var socket_error := bridge.open()
@@ -107,10 +111,10 @@ func _load_character() -> void:
 	if not ResourceLoader.exists("res://assets/soma/soma.glb"):
 		_fatal_message = "人物资源尚未生成，请先运行 tools/setup.ps1"
 		return
-	var scene := load("res://assets/soma/soma.glb") as PackedScene
-	var character := scene.instantiate()
-	character.name = "OfficialSOMA"
-	add_child(character)
+	var character := $Player/Model
+	if flat_mode:
+		$Player.transform = Transform3D.IDENTITY
+		character.transform = Transform3D.IDENTITY
 	skeleton = _find_skeleton(character)
 	if skeleton == null:
 		_fatal_message = "官方人物未包含可用骨架"
@@ -121,14 +125,9 @@ func _load_character() -> void:
 		if index < 0:
 			_fatal_message = "骨架缺少关节：" + joint
 		joint_map.append(index)
-	target_debug_draw = TargetSkeletonDebug.new()
-	target_debug_draw.name = "TargetSkeletonDebug"
-	add_child(target_debug_draw)
+	target_debug_draw = $Debug/TargetSkeletonDebug
 	target_debug_draw.configure(rig["parents"])
-	if not flat_mode and not gym_metadata.is_empty():
-		var start := GymWorld.vector(gym_metadata["start"]["position"])
-		skeleton.set_bone_pose_position(joint_map[0], skeleton.get_bone_pose_position(joint_map[0]) + start)
-		root_position = skeleton.get_bone_pose_position(joint_map[0])
+	root_position = (skeleton.global_transform * skeleton.get_bone_global_pose(joint_map[0])).origin
 	print("SOMA_BINDING joints=%d mapped=%d" % [joint_map.size(), skeleton.get_bone_count()])
 
 
@@ -230,10 +229,16 @@ func _apply_pose(weight: float) -> void:
 		var qa := Quaternion(previous_pose[offset + 3], previous_pose[offset + 4], previous_pose[offset + 5], previous_pose[offset + 6]).normalized()
 		var qb := Quaternion(current_pose[offset + 3], current_pose[offset + 4], current_pose[offset + 5], current_pose[offset + 6]).normalized()
 		var position := a.lerp(b, weight)
-		skeleton.set_bone_pose_position(bone, position)
-		skeleton.set_bone_pose_rotation(bone, qa.slerp(qb, weight))
+		var rotation := qa.slerp(qb, weight)
 		if joint == 0:
 			root_position = position
+			# Model/Player are editable scene instances. Convert streamed world
+			# roots into the skeleton's space instead of overwriting those nodes.
+			var local := skeleton.global_transform.affine_inverse() * Transform3D(Basis(rotation), position)
+			position = local.origin
+			rotation = local.basis.get_rotation_quaternion()
+		skeleton.set_bone_pose_position(bone, position)
+		skeleton.set_bone_pose_rotation(bone, rotation)
 
 
 func _read_direction() -> Vector3:
@@ -249,10 +254,11 @@ func _read_direction() -> Vector3:
 	if axis.is_zero_approx():
 		axis = _tap_axis
 	_sprint_for_frame = _key_down(KEY_SHIFT) or _tap_sprint
-	var forward := -camera.global_basis.z
+	var active_camera := get_viewport().get_camera_3d()
+	var forward := -active_camera.global_basis.z
 	forward.y = 0
 	forward = forward.normalized()
-	var right := camera.global_basis.x
+	var right := active_camera.global_basis.x
 	right.y = 0
 	right = right.normalized()
 	return (right * axis.x - forward * axis.y).normalized()
@@ -304,17 +310,19 @@ func _unhandled_input(event: InputEvent) -> void:
 func _update_camera(delta: float) -> void:
 	if gym_world != null:
 		gym_world.show_station_labels(overview)
+	overview_camera.current = overview and not flat_mode
+	camera.current = not overview_camera.current
 	if overview and not flat_mode:
-		camera.position = Vector3(-12, 17, 12)
-		camera.look_at(Vector3(4, 0.5, -4))
+		return
+	if not follow_player:
 		return
 	var target := Vector3(root_position.x, 0.95, root_position.z)
 	camera_target = camera_target.lerp(target, 1.0 - exp(-8.0 * delta))
 	var offset := Vector3(sin(camera_yaw) * cos(camera_pitch), sin(camera_pitch), cos(camera_yaw) * cos(camera_pitch))
 	# Shift position and aim together so the obstacle stays visible and W keeps
 	# the authored approach direction. Flat gait comparisons retain their view.
-	var shoulder := Vector3.ZERO if flat_mode else Vector3(cos(camera_yaw), 0, -sin(camera_yaw)) * 0.8
-	camera.position = camera_target + offset * camera_distance + shoulder
+	var shoulder := Vector3.ZERO if flat_mode else Vector3(cos(camera_yaw), 0, -sin(camera_yaw)) * shoulder_offset
+	camera.global_position = camera_target + offset * camera_distance + shoulder
 	camera.look_at(camera_target + shoulder)
 
 
@@ -344,9 +352,10 @@ func _apply_scene_status() -> void:
 		_apply_pose(1.0)
 		camera_target = Vector3(root_position.x, 0.95, root_position.z)
 		var facing := GymWorld.vector(snapshot["facing"])
-		camera_yaw = atan2(-facing.x, -facing.z)
-		if _test_station > 0:
-			camera_yaw += PI / 2
+		if orient_camera_on_teleport:
+			camera_yaw = atan2(-facing.x, -facing.z)
+			if _test_station > 0:
+				camera_yaw += PI / 2
 	if snapshot.get("jumping", false):
 		scene_hint.text = "跳跃中\n落地后恢复移动"
 	elif snapshot.get("seated", false):
@@ -472,6 +481,7 @@ func _update_interaction_test() -> void:
 func _finish_interaction_test(completed: bool) -> void:
 	var passed := completed and _test_saw_action and (_test_station != 10 or _test_stand)
 	var report := {"station": _test_station, "passed": passed, "seconds": _test_elapsed,
+		"layout_revision": bridge.scene_status.get("layout_revision", ""),
 		"saw_interaction": _test_saw_action, "stand_requested": _test_stand,
 		"received_poses": bridge.received_frames, "generations": bridge.generation_count,
 		"final_root": [root_position.x, root_position.y, root_position.z]}
@@ -522,186 +532,38 @@ func _exit_tree() -> void:
 		OS.kill(backend_pid)
 
 
-func _make_world() -> void:
-	var environment := WorldEnvironment.new()
-	var settings := Environment.new()
-	settings.background_mode = Environment.BG_COLOR
-	settings.background_color = Color("182225")
-	settings.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	settings.ambient_light_color = Color("b5ced6")
-	settings.ambient_light_energy = 0.25
-	settings.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	environment.environment = settings
-	add_child(environment)
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-52, -30, 0)
-	sun.light_color = Color("fff2db")
-	sun.light_energy = 0.5
-	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 30
-	add_child(sun)
-	var fill := DirectionalLight3D.new()
-	fill.rotation_degrees = Vector3(-25, 145, 0)
-	fill.light_color = Color("b3d6df")
-	fill.light_energy = 0.15
-	add_child(fill)
-	var floor_mesh := MeshInstance3D.new()
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(400, 400)
-	floor_mesh.mesh = plane
-	floor_mesh.position.y = -0.005
-	var material := ShaderMaterial.new()
-	material.shader = preload("res://shaders/grid_floor.gdshader")
-	floor_mesh.material_override = material
-	add_child(floor_mesh)
-	camera = Camera3D.new()
-	camera.fov = 43
-	camera.far = 250
-	add_child(camera)
-	camera.current = true
+func _bind_world() -> void:
+	camera = $CameraRig/FollowCamera
+	overview_camera = $CameraRig/OverviewCamera
+	gym_world = $Gym
+	gym_world.visible = not flat_mode
 	if not flat_mode:
-		if not FileAccess.file_exists("res://assets/gym/gym.json"):
-			_fatal_message = "官方场景尚未准备，请先运行 tools/setup.ps1"
-			return
-		gym_metadata = JSON.parse_string(FileAccess.get_file_as_string("res://assets/gym/gym.json"))
-		gym_world = GymWorld.new()
-		gym_world.name = "OfficialSOMAGym"
-		add_child(gym_world)
-		gym_world.configure(gym_metadata)
-		var start := GymWorld.vector(gym_metadata["start"]["position"])
-		root_position = start + Vector3.UP
-		camera_target = start + Vector3.UP * 0.95
-		camera_yaw = -PI / 2
+		var layout: Dictionary = gym_world.scene_layout($Player.global_transform)
+		if layout.has("error"):
+			_fatal_message = layout["error"]
+		else:
+			bridge.set_scene_layout(layout)
+		root_position = $Player.global_position + Vector3.UP
+		camera_target = $Player.global_position + Vector3.UP * 0.95
 
 
-func _label(text: String, size: int, color := Color.WHITE) -> Label:
-	var result := Label.new()
-	result.text = text
-	result.add_theme_font_size_override("font_size", size)
-	result.add_theme_color_override("font_color", color)
-	return result
-
-
-func _panel() -> PanelContainer:
-	var panel := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.025, 0.045, 0.05, 0.88)
-	style.border_color = Color("344348")
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(12)
-	style.content_margin_left = 22
-	style.content_margin_right = 22
-	style.content_margin_top = 18
-	style.content_margin_bottom = 18
-	panel.add_theme_stylebox_override("panel", style)
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return panel
-
-
-func _make_hud() -> void:
-	var layer := CanvasLayer.new()
-	add_child(layer)
-	var root := Control.new()
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(root)
-	var heading := VBoxContainer.new()
-	heading.position = Vector2(34, 26)
-	heading.add_theme_constant_override("separation", 5)
-	root.add_child(heading)
-	heading.add_child(_label("NVIDIA RESEARCH  /  GODOT STUDY 01", 12, ACCENT))
-	heading.add_child(_label("MotionBricks", 38))
-	heading.add_child(_label("让目标成为动作", 16, MUTED))
-	status_label = _label("●  正在连接本地模型", 14, ACCENT)
-	heading.add_child(status_label)
-	if not flat_mode:
-		scene_hint = _label("正在加载官方 SOMA Gym", 16, ACCENT)
-		scene_hint.position = Vector2(390, 44)
-		scene_hint.custom_minimum_size = Vector2(570, 0)
-		scene_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		root.add_child(scene_hint)
-		var station_panel := _panel()
-		station_panel.position = Vector2(32, 184)
-		station_panel.custom_minimum_size = Vector2(248, 0)
-		root.add_child(station_panel)
-		var stations := VBoxContainer.new()
-		stations.add_theme_constant_override("separation", 10)
-		station_panel.add_child(stations)
-		stations.add_child(_label("SOMA GYM / 官方场景", 14, ACCENT))
-		stations.add_child(_label("前往入口，再按 W 接近", 12, MUTED))
-		for item: Dictionary in gym_metadata.get("stations", []):
-			var button := Button.new()
-			button.text = "%d  %s" % [int(item["number"]), item["name"]]
-			button.custom_minimum_size.y = 35
-			button.focus_mode = Control.FOCUS_NONE
-			button.pressed.connect(_go_to_station.bind(int(item["id"])))
-			stations.add_child(button)
-	var telemetry := _panel()
-	telemetry.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	telemetry.position = Vector2(-282, 30)
-	telemetry.custom_minimum_size = Vector2(250, 0)
-	root.add_child(telemetry)
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 10)
-	telemetry.add_child(column)
-	column.add_child(_label("LOCAL INFERENCE", 12, ACCENT))
-	var metrics := HBoxContainer.new()
-	metrics.add_theme_constant_override("separation", 28)
-	column.add_child(metrics)
-	var fps_column := VBoxContainer.new()
-	metrics.add_child(fps_column)
-	fps_label = _label("—", 30)
-	fps_column.add_child(fps_label)
-	fps_column.add_child(_label("渲染 FPS", 12, MUTED))
-	var infer_column := VBoxContainer.new()
-	metrics.add_child(infer_column)
-	inference_label = _label("—", 26)
-	infer_column.add_child(inference_label)
-	infer_column.add_child(_label("GPU 推理", 12, MUTED))
-	response_label = _label("—", 18)
-	column.add_child(_label("指令 → 首帧姿态", 12, MUTED))
-	column.add_child(response_label)
-	column.add_child(HSeparator.new())
-	target_toggle = CheckButton.new()
-	target_toggle.name = "TargetSkeletonToggle"
-	target_toggle.text = "目标骨架  [F2]"
-	target_toggle.tooltip_text = "显示实际送入 MotionBricks 的 1–4 帧目标姿态"
-	target_toggle.focus_mode = Control.FOCUS_NONE
+func _bind_hud() -> void:
+	var hud := $HUD
+	status_label = hud.status_label
+	fps_label = hud.fps_label
+	inference_label = hud.inference_label
+	response_label = hud.response_label
+	motion_label = hud.motion_label
+	details_label = hud.details_label
+	target_toggle = hud.target_toggle
+	target_label = hud.target_label
+	scene_hint = hud.scene_hint
+	auto_toggle = hud.auto_toggle
+	trigger_toggle = hud.trigger_toggle
+	hud.station_requested.connect(_go_to_station)
 	target_toggle.toggled.connect(_set_debug_targets)
-	column.add_child(target_toggle)
-	target_label = _label("目标骨架已隐藏", 12, MUTED)
-	column.add_child(target_label)
-	if not flat_mode:
-		auto_toggle = CheckButton.new()
-		auto_toggle.text = "自动交互"
-		auto_toggle.button_pressed = true
-		auto_toggle.focus_mode = Control.FOCUS_NONE
-		auto_toggle.toggled.connect(func(value: bool) -> void: bridge.auto_interact = value)
-		column.add_child(auto_toggle)
-		trigger_toggle = CheckButton.new()
-		trigger_toggle.text = "触发区域  [F3]"
-		trigger_toggle.button_pressed = true
-		trigger_toggle.focus_mode = Control.FOCUS_NONE
-		trigger_toggle.toggled.connect(_set_trigger_debug)
-		column.add_child(trigger_toggle)
-	var motion_panel := _panel()
-	motion_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	motion_panel.position = Vector2(32, -207)
-	motion_panel.custom_minimum_size = Vector2(330, 0)
-	root.add_child(motion_panel)
-	var state := VBoxContainer.new()
-	state.add_theme_constant_override("separation", 9)
-	motion_panel.add_child(state)
-	motion_label = _label("待机 / IDLE", 21, ACCENT)
-	state.add_child(motion_label)
-	details_label = _label("实时姿态 → 神经生成 → 根位移", 13, MUTED)
-	state.add_child(details_label)
-	var controls_text := "W A S D  移动     SHIFT  跑步     右键拖动  环视     滚轮  缩放     R  重置     ESC  退出"
-	if not flat_mode:
-		controls_text += "\n空格  跳跃    1–4  挑战入口    E / I  交互 / 起身    F2  目标骨架    F3  触发区    M  总览"
-	var controls := _label(controls_text, 13, Color("d0dad9"))
-	controls.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	controls.position = Vector2(-600, -58)
-	controls.custom_minimum_size.x = 1200
-	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	root.add_child(controls)
+	auto_toggle.toggled.connect(func(value: bool) -> void: bridge.auto_interact = value)
+	trigger_toggle.toggled.connect(_set_trigger_debug)
+	bridge.auto_interact = auto_toggle.button_pressed
+	_set_trigger_debug(trigger_toggle.button_pressed)
+	hud.configure(flat_mode, gym_world.enabled_stations())

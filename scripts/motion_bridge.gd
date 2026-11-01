@@ -34,6 +34,12 @@ var _interact_sequence: int = 0
 var _jump_sequence: int = 0
 var _station_sequence: int = 0
 var _station_id: int = 0
+var scene_layout: Dictionary = {}
+
+
+func set_scene_layout(layout: Dictionary) -> void:
+	scene_layout = layout
+	clear_targets()
 
 
 func open() -> Error:
@@ -61,6 +67,8 @@ func send_control(direction: Vector3, speed: float) -> void:
 		"interact_seq": _interact_sequence, "station_seq": _station_sequence, "station_id": _station_id,
 		"jump_seq": _jump_sequence,
 		"auto_interact": auto_interact, "debug_scene": debug_scene}
+	if not scene_layout.is_empty() and scene_status.get("layout_revision", "") != scene_layout.get("revision", ""):
+		command["scene_layout"] = scene_layout
 	socket.put_packet(JSON.stringify(command).to_utf8_buffer())
 	_reset = false
 

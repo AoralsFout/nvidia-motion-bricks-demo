@@ -2,6 +2,7 @@ extends Node3D
 ## Four actual conditioning poses. Coordinates are source-local, root in Y-up world.
 
 const COLORS := [Color("59dcff"), Color("b999ff"), Color("ffbe72"), Color("ff83b7")]
+@export var target_colors: Array[Color] = [Color("59dcff"), Color("b999ff"), Color("ffbe72"), Color("ff83b7")]
 var bone_count: int = 0
 var pose_count: int = 0
 var _parents := PackedInt32Array()
@@ -11,37 +12,10 @@ var _joints: MultiMeshInstance3D
 
 func configure(parents: Array) -> void:
 	_parents = PackedInt32Array(parents)
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.vertex_color_use_as_albedo = true
-	material.no_depth_test = true
-	material.render_priority = 10
-	var bone_mesh := CylinderMesh.new()
-	bone_mesh.top_radius = 0.007
-	bone_mesh.bottom_radius = 0.007
-	bone_mesh.height = 1.0
-	bone_mesh.radial_segments = 6
-	bone_mesh.material = material
-	var joint_mesh := SphereMesh.new()
-	joint_mesh.radius = 0.014
-	joint_mesh.height = 0.028
-	joint_mesh.radial_segments = 6
-	joint_mesh.rings = 4
-	joint_mesh.material = material
-	_bones = _instances(bone_mesh)
-	_joints = _instances(joint_mesh)
-	add_child(_bones)
-	add_child(_joints)
-
-
-func _instances(mesh: Mesh) -> MultiMeshInstance3D:
-	var instance := MultiMeshInstance3D.new()
-	instance.multimesh = MultiMesh.new()
-	instance.multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	instance.multimesh.use_colors = true
-	instance.multimesh.mesh = mesh
-	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return instance
+	_bones = $Bones
+	_joints = $Joints
+	_bones.multimesh = _bones.multimesh.duplicate()
+	_joints.multimesh = _joints.multimesh.duplicate()
 
 
 func show_targets(poses: PackedFloat32Array, count: int) -> void:
@@ -55,6 +29,7 @@ func show_targets(poses: PackedFloat32Array, count: int) -> void:
 	var colors: Array[Color] = []
 	_joints.multimesh.instance_count = count * joint_count
 	for frame: int in range(count):
+		var pose_color: Color = target_colors[frame] if frame < target_colors.size() else COLORS[frame]
 		var world: Array[Transform3D] = []
 		world.resize(joint_count)
 		for joint: int in range(joint_count):
@@ -67,7 +42,7 @@ func show_targets(poses: PackedFloat32Array, count: int) -> void:
 			var endpoint := world[joint].origin
 			var instance_index := frame * joint_count + joint
 			_joints.multimesh.set_instance_transform(instance_index, Transform3D(Basis.IDENTITY, endpoint))
-			_joints.multimesh.set_instance_color(instance_index, COLORS[frame])
+			_joints.multimesh.set_instance_color(instance_index, pose_color)
 			if parent < 0:
 				continue
 			var start := world[parent].origin
@@ -79,7 +54,7 @@ func show_targets(poses: PackedFloat32Array, count: int) -> void:
 			var x := helper.cross(y).normalized()
 			var z := x.cross(y).normalized()
 			segments.append(Transform3D(Basis(x, y * distance, z), (start + endpoint) * 0.5))
-			colors.append(COLORS[frame])
+			colors.append(pose_color)
 	bone_count = segments.size()
 	_bones.multimesh.instance_count = bone_count
 	for index: int in range(bone_count):

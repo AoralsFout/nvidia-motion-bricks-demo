@@ -1,0 +1,45 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/target_skeleton_debug.gd" id="1_01bpk"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_nuemx"]
+render_priority = 10
+no_depth_test = true
+shading_mode = 0
+vertex_color_use_as_albedo = true
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_c8l1t"]
+material = SubResource("StandardMaterial3D_nuemx")
+top_radius = 0.007
+bottom_radius = 0.007
+height = 1.0
+radial_segments = 6
+
+[sub_resource type="MultiMesh" id="MultiMesh_6cliw"]
+transform_format = 1
+use_colors = true
+mesh = SubResource("CylinderMesh_c8l1t")
+
+[sub_resource type="SphereMesh" id="SphereMesh_07th6"]
+material = SubResource("StandardMaterial3D_nuemx")
+radius = 0.014
+height = 0.028
+radial_segments = 6
+rings = 4
+
+[sub_resource type="MultiMesh" id="MultiMesh_r1cr8"]
+transform_format = 1
+use_colors = true
+mesh = SubResource("SphereMesh_07th6")
+
+[node name="TargetSkeletonDebug" type="Node3D" unique_id=314880350]
+visible = false
+script = ExtResource("1_01bpk")
+
+[node name="Bones" type="MultiMeshInstance3D" parent="." unique_id=1673759091]
+cast_shadow = 0
+multimesh = SubResource("MultiMesh_6cliw")
+
+[node name="Joints" type="MultiMeshInstance3D" parent="." unique_id=1537025680]
+cast_shadow = 0
+multimesh = SubResource("MultiMesh_r1cr8")

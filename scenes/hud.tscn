@@ -1,0 +1,267 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/demo_hud.gd" id="1_ahhtf"]
+
+[ext_resource type="StyleBox" path="res://assets/ui/panel_style.tres" id="2_style"]
+
+[node name="HUD" type="CanvasLayer" unique_id=1712142342]
+script = ExtResource("1_ahhtf")
+
+[node name="Layout" type="Control" parent="." unique_id=1091284769]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="Heading" type="VBoxContainer" parent="Layout" unique_id=978482409]
+layout_mode = 0
+offset_left = 34.0
+offset_top = 26.0
+offset_right = 34.0
+offset_bottom = 26.0
+theme_override_constants/separation = 5
+
+[node name="Kicker" type="Label" parent="Layout/Heading" unique_id=909401466]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7137255, 0.9490196, 0.3764706, 1)
+theme_override_font_sizes/font_size = 12
+text = "NVIDIA RESEARCH  /  GODOT STUDY 01"
+
+[node name="Title" type="Label" parent="Layout/Heading" unique_id=1825673974]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 38
+text = "MotionBricks"
+
+[node name="Subtitle" type="Label" parent="Layout/Heading" unique_id=1530180865]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.54901963, 0.6, 0.6039216, 1)
+theme_override_font_sizes/font_size = 16
+text = "让目标成为动作"
+
+[node name="StatusLabel" type="Label" parent="Layout/Heading" unique_id=1598503469]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7137255, 0.9490196, 0.3764706, 1)
+theme_override_font_sizes/font_size = 14
+text = "●  正在连接本地模型"
+
+[node name="SceneHint" type="Label" parent="Layout" unique_id=766532926]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(570, 0)
+layout_mode = 0
+offset_left = 390.0
+offset_top = 44.0
+offset_right = 390.0
+offset_bottom = 44.0
+theme_override_colors/font_color = Color(0.7137255, 0.9490196, 0.3764706, 1)
+theme_override_font_sizes/font_size = 16
+text = "正在加载官方 SOMA Gym"
+horizontal_alignment = 1
+
+[node name="StationPanel" type="PanelContainer" parent="Layout" unique_id=1823627777]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(248, 0)
+layout_mode = 0
+offset_left = 32.0
+offset_top = 184.0
+offset_right = 32.0
+offset_bottom = 184.0
+mouse_filter = 2
+theme_override_styles/panel = ExtResource("2_style")
+
+[node name="StationButtons" type="VBoxContainer" parent="Layout/StationPanel" unique_id=858100807]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Layout/StationPanel/StationButtons" unique_id=1479659]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7137255, 0.9490196, 0.3764706, 1)
+theme_override_font_sizes/font_size = 14
+text = "SOMA GYM / 官方场景"
+
+[node name="Instruction" type="Label" parent="Layout/StationPanel/StationButtons" unique_id=32359576]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.54901963, 0.6, 0.6039216, 1)
+theme_override_font_sizes/font_size = 12
+text = "前往入口，再按 W 接近"
+
+[node name="SmallJump" type="Button" parent="Layout/StationPanel/StationButtons" unique_id=1321515308 groups=["station_buttons"]]
+custom_minimum_size = Vector2(0, 35)
+layout_mode = 2
+focus_mode = 0
+text = "1  低箱跨越"
+metadata/station_id = 2
+
+[node name="HighVault" type="Button" parent="Layout/StationPanel/StationButtons" unique_id=1625720619 groups=["station_buttons"]]
+custom_minimum_size = Vector2(0, 35)
+layout_mode = 2
+focus_mode = 0
+text = "2  高墙跨越"
+metadata/station_id = 5
+
+[node name="SitStand" type="Button" parent="Layout/StationPanel/StationButtons" unique_id=815540548 groups=["station_buttons"]]
+custom_minimum_size = Vector2(0, 35)
+layout_mode = 2
+focus_mode = 0
+text = "3  坐下 / 站起"
+metadata/station_id = 10
+
+[node name="Avoidance" type="Button" parent="Layout/StationPanel/StationButtons" unique_id=29993899 groups=["station_buttons"]]
+custom_minimum_size = Vector2(0, 35)
+layout_mode = 2
+focus_mode = 0
+text = "4  低杆躲避"
+metadata/station_id = 12
+
+[node name="Telemetry" type="PanelContainer" parent="Layout" unique_id=1641602789]
+custom_minimum_size = Vector2(250, 0)
+layout_mode = 0
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -282.0
+offset_top = 30.0
+offset_right = -282.0
+offset_bottom = 30.0
+mouse_filter = 2
+theme_override_styles/panel = ExtResource("2_style")
+
+[node name="Column" type="VBoxContainer" parent="Layout/Telemetry" unique_id=885216869]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Layout/Telemetry/Column" unique_id=1931698311]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7137255, 0.9490196, 0.3764706, 1)
+theme_override_font_sizes/font_size = 12
+text = "LOCAL INFERENCE"
+
+[node name="Metrics" type="HBoxContainer" parent="Layout/Telemetry/Column" unique_id=306594031]
+layout_mode = 2
+theme_override_constants/separation = 28
+
+[node name="FPS" type="VBoxContainer" parent="Layout/Telemetry/Column/Metrics" unique_id=944351955]
+layout_mode = 2
+
+[node name="FPSValue" type="Label" parent="Layout/Telemetry/Column/Metrics/FPS" unique_id=1404612479]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 30
+text = "—"
+
+[node name="Caption" type="Label" parent="Layout/Telemetry/Column/Metrics/FPS" unique_id=1889192618]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.54901963, 0.6, 0.6039216, 1)
+theme_override_font_sizes/font_size = 12
+text = "渲染 FPS"
+
+[node name="Inference" type="VBoxContainer" parent="Layout/Telemetry/Column/Metrics" unique_id=311680105]
+layout_mode = 2
+
+[node name="InferenceValue" type="Label" parent="Layout/Telemetry/Column/Metrics/Inference" unique_id=2052985097]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 26
+text = "—"
+
+[node name="Caption" type="Label" parent="Layout/Telemetry/Column/Metrics/Inference" unique_id=1641674303]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.54901963, 0.6, 0.6039216, 1)
+theme_override_font_sizes/font_size = 12
+text = "GPU 推理"
+
+[node name="ResponseCaption" type="Label" parent="Layout/Telemetry/Column" unique_id=1609457945]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.54901963, 0.6, 0.6039216, 1)
+theme_override_font_sizes/font_size = 12
+text = "指令 → 首帧姿态"
+
+[node name="ResponseValue" type="Label" parent="Layout/Telemetry/Column" unique_id=1053047325]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 18
+text = "—"
+
+[node name="Separator" type="HSeparator" parent="Layout/Telemetry/Column" unique_id=1299777977]
+layout_mode = 2
+
+[node name="TargetSkeletonToggle" type="CheckButton" parent="Layout/Telemetry/Column" unique_id=97418617]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "显示实际送入 MotionBricks 的 1–4 帧目标姿态"
+focus_mode = 0
+text = "目标骨架  [F2]"
+
+[node name="TargetLabel" type="Label" parent="Layout/Telemetry/Column" unique_id=1831302555]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.54901963, 0.6, 0.6039216, 1)
+theme_override_font_sizes/font_size = 12
+text = "目标骨架已隐藏"
+
+[node name="AutoInteractionToggle" type="CheckButton" parent="Layout/Telemetry/Column" unique_id=1611911796]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+button_pressed = true
+text = "自动交互"
+
+[node name="TriggerRegionToggle" type="CheckButton" parent="Layout/Telemetry/Column" unique_id=1770857442]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+button_pressed = true
+text = "触发区域  [F3]"
+
+[node name="MotionPanel" type="PanelContainer" parent="Layout" unique_id=1906462815]
+custom_minimum_size = Vector2(330, 0)
+layout_mode = 0
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 32.0
+offset_top = -207.0
+offset_right = 32.0
+offset_bottom = -207.0
+mouse_filter = 2
+theme_override_styles/panel = ExtResource("2_style")
+
+[node name="Column" type="VBoxContainer" parent="Layout/MotionPanel" unique_id=1187153649]
+layout_mode = 2
+theme_override_constants/separation = 9
+
+[node name="MotionLabel" type="Label" parent="Layout/MotionPanel/Column" unique_id=846959488]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7137255, 0.9490196, 0.3764706, 1)
+theme_override_font_sizes/font_size = 21
+text = "待机 / IDLE"
+
+[node name="DetailsLabel" type="Label" parent="Layout/MotionPanel/Column" unique_id=1506144908]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.54901963, 0.6, 0.6039216, 1)
+theme_override_font_sizes/font_size = 13
+text = "实时姿态 → 神经生成 → 根位移"
+
+[node name="Controls" type="Label" parent="Layout" unique_id=1295324179]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(1200, 0)
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -600.0
+offset_top = -58.0
+offset_right = 600.0
+offset_bottom = -10.0
+grow_vertical = 0
+theme_override_colors/font_color = Color(0.8156863, 0.85490197, 0.8509804, 1)
+theme_override_font_sizes/font_size = 13
+text = "W A S D  移动     SHIFT  跑步     右键拖动  环视     滚轮  缩放     R  重置     ESC  退出
+空格  跳跃    1–4  挑战入口    E / I  交互 / 起身    F2  目标骨架    F3  触发区    M  总览"
+horizontal_alignment = 1

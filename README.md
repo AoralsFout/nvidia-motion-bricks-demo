@@ -51,9 +51,41 @@ M 切换场景总览；地面箭头标记各站的建议接近方向。
 骨架允许透过人物查看；每次重新生成时更新，重置后清空，等待下一次生成。
 关闭时后端不读取或传输目标骨架数据。命令行可追加 `--debug-targets` 初始开启。
 
+## 在 Godot 编辑器中编辑
+
+打开 `scenes/main.tscn` 即可查看完整场景。主体节点已保存为场景资源，运行时只绑定节点，不再重新生成灯光、地面、人物、四个站点或 HUD。
+主场景已开启子场景的可编辑子节点，也可以单独打开下列子场景修改。
+
+| 场景树 / 资源 | 可编辑内容 |
+| --- | --- |
+| `main.tscn → World` | 环境、背景、太阳光、补光、地面 Mesh |
+| `main.tscn → Gym` / `scenes/gym.tscn` | 四个站点的位置、朝向、物体材质、标签 |
+| `main.tscn → Player` / `scenes/character.tscn` | 玩家出生位置与朝向、官方人物模型和骨架查看 |
+| `main.tscn → CameraRig` | 跟随相机、总览相机的 FOV / 裁剪距离与总览构图 |
+| 主场景根节点 Inspector 的 `Camera` 组 | 跟随开关、视角俯仰、距离、侧向偏移；关闭 `Follow Player` 后可直接布置跟随相机位置 |
+| `scenes/hud.tscn` | 标题、按钮、字体、颜色、锚点、容器布局和统计面板；保留带 `%` 唯一名称的运行时控件 |
+| `assets/ui/panel_style.tres` | 共享面板背景、边框、圆角和内边距 |
+| `assets/materials/grid_floor.tres` | 网格间距、粗细和配色等 Shader 参数 |
+| `scenes/target_skeleton_debug.tscn` | 目标骨架的骨骼 / 关节 Mesh、材质、半径与目标颜色 |
+
+移动交互物体时，请选中 `SmallJump`、`HighVault`、`SitStand` 或 `Avoidance` 整个站点根节点，保存后重新运行。
+启动时场景中的刚体变换会同步给 Python，目标姿态、触发区域和入口快捷键会一起移动；R 也会重置到编辑后的 `Player` 起点。
+站点的 `Interaction Enabled` 可关闭交互及其入口按钮。当前保留四种官方交互，每种 ID 在场景内保持唯一。
+
+交互目前基于水平地面：玩家与站点根节点保持 Y=0、单位缩放，只沿 X/Z 平移或绕 Y 轴旋转。
+`Geometry` 子节点的 Mesh 尺寸、缩放和局部变换只改变外观；修改实际接触高度或形状，需要同时修改对应的官方 Smart Primitive 目标。
+地面也应保持水平。添加普通装饰节点不受站点类型限制。
+
+骨架姿态、实际触发包围盒和入口箭头来自模型运行数据，仍在运行时更新；它们的承载节点和绘制资源已经保存在场景树中。
+`setup.ps1` 不会重写这些 `.tscn` 文件。`assets/gym/gym.json` 保留为官方场景来源记录，运行时布局以 Godot 场景节点为准。
+
 ## 验证
 
 ```powershell
+# 编辑器结构、保存 / 重载、变换同步，以及移动站点后的真实动作
+.runtime/tools/godot/Godot_v4.7.2-stable_win64_console.exe --headless --path . --script tools/check_editor_scene.gd
+.runtime/motionbricks/.venv/Scripts/python.exe tools/check_scene_layout.py
+.runtime/tools/godot/Godot_v4.7.2-stable_win64_console.exe --path . --script tools/check_editor_scene_ui.gd -- --debug-targets
 # 四站真实模型动作检查：跨越、坐姿保持与起身、降低头部通过低杆
 .runtime/motionbricks/.venv/Scripts/python.exe tools/check_gym.py
 # 原地 / 行走 / 跑步跳跃：双脚腾空、落地、恢复移动、禁止空中重复起跳
@@ -77,6 +109,7 @@ pwsh -File tools/run.ps1 -SoakSeconds 600
 四站动作统计保存在 `logs/gym/check.json` 和各站原始姿态；
 有窗口检查保存在 `logs/gym/ui-{id}.json`，动作截图为 `logs/gym/live-{id}.png`。
 自由跳跃检查及原始姿态保存在 `logs/jump/`，`ui.json` 为有窗口检查，`live.png` 为腾空截图。
+编辑器布局检查位于 `logs/editor-scene/`：包括保存后的测试场景、发送给后端的布局、变换误差及动作检查结果。
 四种交互的模型侧检查和 Godot 端完整触发检查均已通过；坐姿检查包含保持和手动起身。
 这些是功能检查，尚未对 Gym 模式重复执行十分钟性能验收。持续运行命令仍使用平地模式。
 

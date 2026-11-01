@@ -1,0 +1,8 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://assets/soma/soma.glb" id="1_agfs1"]
+
+[node name="Player" type="Node3D" unique_id=1333351339]
+
+[node name="Model" type="Node3D" parent="." unique_id=2056993855 instance=ExtResource("1_agfs1")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)

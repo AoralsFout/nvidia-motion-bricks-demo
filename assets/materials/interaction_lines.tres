@@ -1,0 +1,7 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[resource]
+shading_mode = 0
+transparency = 1
+vertex_color_use_as_albedo = true
+no_depth_test = true

@@ -1,55 +1,67 @@
 extends Node3D
-## Authored official scene geometry plus optional live interaction-box outlines.
+## Static station nodes are edited in gym.tscn; only model debug data is dynamic.
 
 const TITLES := {2: "低箱跨越", 5: "高墙跨越", 10: "坐下 / 站起", 12: "低杆躲避"}
-var metadata: Dictionary
+@export var inactive_color := Color(0.95, 0.25, 0.65, 0.8)
+@export var nearby_color := Color(0.6, 1.0, 0.3, 0.95)
+@export var active_color := Color(1.0, 0.7, 0.2, 0.95)
 var trigger_visible: bool = true
-var _wire := ImmediateMesh.new()
-var _wire_instance := MeshInstance3D.new()
-var _wire_material := StandardMaterial3D.new()
-var _entries_ready: bool = false
-var _labels: Array[Label3D] = []
+var _wire: ImmediateMesh
+var _last_entries: String = ""
+@onready var _wire_instance: MeshInstance3D = $TriggerRegions
+@onready var _arrows: MeshInstance3D = $EntryArrows
+
+
+func _ready() -> void:
+	_wire = _wire_instance.mesh.duplicate()
+	_wire_instance.mesh = _wire
+	_arrows.mesh = _arrows.mesh.duplicate()
 
 
 func show_station_labels(enabled: bool) -> void:
-	for label: Label3D in _labels:
-		label.visible = enabled
+	for child: Node in get_children():
+		if child.has_node("Label"):
+			child.get_node("Label").visible = enabled
 
 
-func configure(data: Dictionary) -> void:
-	metadata = data
-	for item: Dictionary in data["objects"]:
-		var instance := MeshInstance3D.new()
-		instance.name = item["name"]
-		var mesh := BoxMesh.new()
-		mesh.size = vector(item["size"])
-		instance.mesh = mesh
-		instance.transform = transform_from(item)
-		var material := StandardMaterial3D.new()
-		var color: Array = item["color"]
-		material.albedo_color = Color(color[0], color[1], color[2])
-		material.roughness = 0.8
-		instance.material_override = material
-		add_child(instance)
-	for item: Dictionary in data["stations"]:
-		var label := Label3D.new()
-		label.text = "%d  %s\n%s" % [int(item["number"]), item["name"], item["english"]]
-		label.position = vector(item["position"]) + Vector3(0, 2.9, 0)
-		label.font_size = 42
-		label.pixel_size = 0.006
-		label.outline_size = 8
-		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		label.no_depth_test = true
-		label.visible = false
-		add_child(label)
-		_labels.append(label)
-	_wire_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_wire_material.vertex_color_use_as_albedo = true
-	_wire_material.no_depth_test = true
-	_wire_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_wire_instance.mesh = _wire
-	_wire_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(_wire_instance)
+func enabled_stations() -> Dictionary:
+	var result := {}
+	for child: Node in get_children():
+		if child.get_script() == preload("res://scripts/interaction_station.gd"):
+			result[child.station_id] = child.interaction_enabled
+	return result
+
+
+static func _placement(transform: Transform3D) -> Dictionary:
+	var q := transform.basis.orthonormalized().get_rotation_quaternion()
+	return {"position": [transform.origin.x, transform.origin.y, transform.origin.z],
+		"rotation": [q.x, q.y, q.z, q.w]}
+
+
+static func _placement_error(transform: Transform3D) -> bool:
+	return not transform.basis.get_scale().is_equal_approx(Vector3.ONE) or absf(transform.origin.y) > 0.01 or transform.basis.y.dot(Vector3.UP) < 0.999
+
+
+func scene_layout(start: Transform3D) -> Dictionary:
+	if _placement_error(start):
+		return {"error": "Player 起点请保持单位缩放、Y=0，并只绕 Y 轴旋转"}
+	var result := {"start": _placement(start), "stations": []}
+	var seen := {}
+	for child: Node in get_children():
+		if child.get_script() != preload("res://scripts/interaction_station.gd"):
+			continue
+		var id: int = child.station_id
+		if seen.has(id) or not TITLES.has(id):
+			return {"error": "场景中交互站点 ID 无效或重复：%d" % id}
+		seen[id] = true
+		if _placement_error(child.global_transform):
+			return {"error": "%s 请保持单位缩放、Y=0，并只绕 Y 轴旋转" % child.name}
+		var station := _placement(child.global_transform)
+		station["id"] = id
+		station["enabled"] = child.interaction_enabled
+		result["stations"].append(station)
+	result["revision"] = JSON.stringify(result).sha256_text()
+	return result
 
 
 static func vector(values: Array) -> Vector3:
@@ -63,15 +75,18 @@ static func transform_from(item: Dictionary) -> Transform3D:
 
 func update_status(status: Dictionary) -> void:
 	_wire_instance.visible = trigger_visible
-	if not _entries_ready and status.has("entries"):
-		_make_entries(status["entries"])
-		_entries_ready = true
+	if status.has("entries"):
+		var signature := JSON.stringify(status["entries"])
+		if signature != _last_entries:
+			_last_entries = signature
+			_make_entries(status["entries"])
 	if not trigger_visible or not status.has("boxes"):
 		return
+
 	_wire.clear_surfaces()
 	if status["boxes"].is_empty():
 		return
-	_wire.surface_begin(Mesh.PRIMITIVE_LINES, _wire_material)
+	_wire.surface_begin(Mesh.PRIMITIVE_LINES)
 	for item: Dictionary in status["boxes"]:
 		var half_size := vector(item["size"]) * 0.5
 		var placement := transform_from(item)
@@ -80,11 +95,11 @@ func update_status(status: Dictionary) -> void:
 			for y: int in [-1, 1]:
 				for z: int in [-1, 1]:
 					vertices.append(placement * (half_size * Vector3(x, y, z)))
-		var color := Color(0.95, 0.25, 0.65, 0.8)
+		var color := inactive_color
 		if int(status.get("active", 0)) == int(item["id"]):
-			color = Color(1.0, 0.7, 0.2, 0.95)
+			color = active_color
 		elif int(status.get("near", 0)) == int(item["id"]):
-			color = Color(0.6, 1.0, 0.3, 0.95)
+			color = nearby_color
 		for index: int in range(8):
 			for bit: int in [1, 2, 4]:
 				var neighbor := index ^ bit
@@ -97,13 +112,11 @@ func update_status(status: Dictionary) -> void:
 
 
 func _make_entries(entries: Array) -> void:
-	var mesh := ImmediateMesh.new()
-	var instance := MeshInstance3D.new()
-	instance.mesh = mesh
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = Color("b6f260")
-	mesh.surface_begin(Mesh.PRIMITIVE_LINES, material)
+	var mesh := _arrows.mesh as ImmediateMesh
+	mesh.clear_surfaces()
+	if entries.is_empty():
+		return
+	mesh.surface_begin(Mesh.PRIMITIVE_LINES)
 	for item: Dictionary in entries:
 		var start := vector(item["position"])
 		start.y = 0.025
@@ -114,4 +127,3 @@ func _make_entries(entries: Array) -> void:
 				tip, tip - forward * 0.25 - right * 0.2]:
 			mesh.surface_add_vertex(segment)
 	mesh.surface_end()
-	add_child(instance)

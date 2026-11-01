@@ -1,6 +1,84 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="2_85g3d"]
+[ext_resource type="Script" path="res://scripts/demo_hud.gd" id="3_choun"]
+[ext_resource type="PackedScene" path="res://scenes/gym.tscn" id="4_ya4ey"]
+[ext_resource type="Script" path="res://scripts/gym_world.gd" id="5_eb6dy"]
+[ext_resource type="PackedScene" path="res://scenes/character.tscn" id="6_trceg"]
+[ext_resource type="ShaderMaterial" path="res://assets/materials/grid_floor.tres" id="7_a8y0u"]
+[ext_resource type="PackedScene" path="res://scenes/target_skeleton_debug.tscn" id="8_jkv2x"]
+[ext_resource type="Script" path="res://scripts/target_skeleton_debug.gd" id="9_jbj1t"]
 
-[node name="MotionBricksLab" type="Node3D"]
+[sub_resource type="Environment" id="Environment_muem4"]
+background_mode = 1
+background_color = Color(0.09411765, 0.13333334, 0.14509805, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.70980394, 0.80784315, 0.8392157, 1)
+ambient_light_energy = 0.25
+tonemap_mode = 2
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_0ld40"]
+size = Vector2(400, 400)
+
+[node name="MotionBricksLab" type="Node3D" unique_id=1325462410]
 script = ExtResource("1")
+
+[node name="HUD" type="CanvasLayer" parent="." unique_id=1712142342 instance=ExtResource("2_85g3d")]
+script = ExtResource("3_choun")
+
+[node name="Gym" type="Node3D" parent="." unique_id=1535135183 instance=ExtResource("4_ya4ey")]
+script = ExtResource("5_eb6dy")
+
+[node name="Player" type="Node3D" parent="." unique_id=1333351339 instance=ExtResource("6_trceg")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.999999, -2.3841858e-07, -3.9999998)
+
+[node name="World" type="Node3D" parent="." unique_id=2144000667]
+
+[node name="Environment" type="WorldEnvironment" parent="World" unique_id=977642966]
+environment = SubResource("Environment_muem4")
+
+[node name="Sun" type="DirectionalLight3D" parent="World" unique_id=64915618]
+transform = Transform3D(0.8660254, 0.39400536, -0.30783075, 0, 0.6156615, 0.7880107, 0.5, -0.6824373, 0.5331785, 0, 0, 0)
+light_color = Color(1, 0.9490196, 0.85882354, 1)
+light_energy = 0.5
+shadow_enabled = true
+directional_shadow_max_distance = 30.0
+
+[node name="FillLight" type="DirectionalLight3D" parent="World" unique_id=365206246]
+transform = Transform3D(-0.81915206, -0.24240388, 0.5198368, 0, 0.90630776, 0.42261827, -0.57357645, 0.34618863, -0.74240386, 0, 0, 0)
+light_color = Color(0.7019608, 0.8392157, 0.8745098, 1)
+light_energy = 0.15
+
+[node name="GridFloor" type="MeshInstance3D" parent="World" unique_id=72559889]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.005, 0)
+material_override = ExtResource("7_a8y0u")
+mesh = SubResource("PlaneMesh_0ld40")
+
+[node name="CameraRig" type="Node3D" parent="." unique_id=1341614775]
+
+[node name="FollowCamera" type="Camera3D" parent="CameraRig" unique_id=2043682989]
+transform = Transform3D(-4.371139e-08, 0.27635562, -0.96105546, 0, 0.96105546, 0.27635562, 1, 1.2079888e-08, -4.200907e-08, -13.285805, 2.4699562, -3.1999998)
+current = true
+fov = 43.0
+far = 250.0
+
+[node name="OverviewCamera" type="Camera3D" parent="CameraRig" unique_id=563533256]
+transform = Transform3D(0.70710677, 0.4166215, -0.57133746, 0, 0.8079932, 0.5891918, 0.70710677, -0.4166215, 0.57133746, -12, 17, 12)
+fov = 43.0
+
+[node name="Debug" type="Node3D" parent="." unique_id=2132274106]
+
+[node name="TargetSkeletonDebug" type="Node3D" parent="Debug" unique_id=314880350 instance=ExtResource("8_jkv2x")]
+visible = false
+script = ExtResource("9_jbj1t")
+
+[editable path="Gym"]
+
+[editable path="HUD"]
+
+[editable path="Player"]
+
+[editable path="Player/Model"]
+
+[editable path="Debug/TargetSkeletonDebug"]

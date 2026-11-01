@@ -20,6 +20,9 @@ class GymRuntime(MotionRuntime):
         from app.runtime.common.io.smart_primitive_document import SmartPrimitiveAssetPool
         from app.runtime.common.smart_primitive_behaviors import behavior_types
         self.definition = load_definition()
+        self.start_transform = self.definition.character_start.transform
+        self.station_overrides = {}
+        self.layout_revision = ""
         self.asset_pool = SmartPrimitiveAssetPool(ClipRegistry(ModelRig.SOMA, skeleton=self.skeleton),
             self.skeleton.reference_local_transforms, self.to_runtime)
         self.behavior_types = behavior_types()
@@ -66,15 +69,19 @@ class GymRuntime(MotionRuntime):
             self.generation_offset += self.character.generation_count
             if self.character.state_machine.is_interacting:
                 self.character.state_machine.interaction_state.primitive.unbind()
-        self.character = self._new_character(transform or self.definition.character_start.transform)
+        self.character = self._new_character(self.start_transform if transform is None else transform)
         self.instances = []
         offset = 0
         with wp.ScopedStream(self.engine.stream):
             for definition in self.definition.smart_primitives:
+                override = self.station_overrides.get(definition.id, {})
+                if not override.get("enabled", True):
+                    continue
+                placement = override.get("transform", definition.transform)
                 behavior = self.asset_pool.instantiate(definition.reference, self.behavior_types[definition.behavior])
-                behavior.set_node_world_transform(0, definition.transform, stream=self.engine.stream)
+                behavior.set_node_world_transform(0, placement, stream=self.engine.stream)
                 self.character.state_machine.interaction_state.prepare(self.character, behavior)
-                self.instances.append({"definition": definition, "behavior": behavior, "offset": offset,
+                self.instances.append({"definition": definition, "transform": placement, "behavior": behavior, "offset": offset,
                     "count": behavior.interaction_box_count, "overlap": False})
                 offset += behavior.interaction_box_count
             from motionbricks.runtime.smart_primitive import InteractionBox
@@ -108,7 +115,7 @@ class GymRuntime(MotionRuntime):
             params = behavior.get_world_target_poses_for_sequence(0, output, stream=self.engine.stream)
             roots = output.numpy()[:, 0]
             first = roots[0, :3].copy()
-            center = np.array(definition.transform.p, dtype=np.float32)
+            center = np.array(item["transform"].p, dtype=np.float32)
             direction = center - first
             direction[2] = 0
             if np.linalg.norm(direction) < 0.2:
@@ -128,6 +135,20 @@ class GymRuntime(MotionRuntime):
             return
         self.reset(self.entries[station_id][0])
         self.selected_station = station_id
+
+    def configure_scene(self, layout):
+        """Apply a complete editor scene once; later packets acknowledge its hash."""
+        if layout.get("revision", "") == self.layout_revision:
+            return False
+        from scene_layout import parse_layout
+        ids = {definition.id for definition in self.definition.smart_primitives}
+        revision, start, overrides = parse_layout(self.wp, layout, ids)
+        self.layout_revision = revision
+        self.start_transform = start
+        self.station_overrides = overrides
+        self.entries = {}
+        self.reset()
+        return True
 
     def _sync(self):
         character = self.character
@@ -166,7 +187,7 @@ class GymRuntime(MotionRuntime):
             self.jump_cooldown = 0.2
         candidates = [item for item in self.instances if item["overlap"]]
         self.nearest = min(candidates, key=lambda item: np.linalg.norm(
-            np.array(item["definition"].transform.p) - character.character_ground_position), default=None)
+            np.array(item["transform"].p) - character.character_ground_position), default=None)
         if jump and not machine.is_interacting and self.jump_cooldown <= 0:
             facing = jump_direction if jump_speed > 0.1 else character.movement.current_facing
             self.free_jump.configure_jump(character, facing, jump_speed)
@@ -221,6 +242,7 @@ class GymRuntime(MotionRuntime):
         machine = self.character.state_machine
         active_id = self.active["definition"].id if self.active else 0
         status = {"time": time.perf_counter(), "state": machine.state.name,
+            "layout_revision": self.layout_revision,
             "selected": self.selected_station,
             "interacting": machine.is_interacting, "seated": machine.is_interacting and machine.interaction_state.is_looping,
             "jumping": self.jumping, "jump_started": self.jump_started, "jump_completed": self.jump_completed,

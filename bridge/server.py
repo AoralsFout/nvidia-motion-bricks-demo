@@ -122,6 +122,11 @@ def main():
                             continue
                         if incoming.get("quit"):
                             return
+                        if not args.flat and "scene_layout" in incoming:
+                            try:
+                                runtime.configure_scene(incoming["scene_layout"])
+                            except (KeyError, TypeError, ValueError) as error:
+                                raise RuntimeError(f"Invalid Godot editor scene layout: {error}") from error
                         if incoming.get("reset"):
                             runtime.reset()
                         if not args.flat:
